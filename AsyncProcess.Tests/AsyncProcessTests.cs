@@ -1,5 +1,5 @@
-﻿using System.ComponentModel;
-using System.Diagnostics;
+﻿using System;
+using System.ComponentModel;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +23,7 @@ namespace SamOatesGames.Tests
         [TestCategory("Basic Execute Tests")]
         public async Task ExecutePingAsyncViaClassAndCheckExitCode()
         {
-            using (var process = new AsyncProcess(new ProcessStartInfo("ping.exe")))
+            using (var process = new AsyncProcess(new AsyncProcessStartInfo("ping.exe")))
             {
                 var result = await process.Run();
                 Assert.AreEqual(AsyncProcessCompletionState.Completed, result.CompletionState);
@@ -47,15 +47,39 @@ namespace SamOatesGames.Tests
             var cancellationSource = new CancellationTokenSource();
             var token = cancellationSource.Token;
 
-            using (var process = new AsyncProcess(new ProcessStartInfo("cmd.exe"), token))
+            using (var process = new AsyncProcess(new AsyncProcessStartInfo("notepad.exe"), token))
             {
                 var runTask = process.Run();
-                await Task.Delay(100, token);
+                await Task.Delay(500, token);
 
                 cancellationSource.Cancel();
                 var result = await runTask;
+
                 Assert.AreEqual(AsyncProcessCompletionState.Cancelled, result.CompletionState);
                 Assert.AreEqual(int.MinValue, result.ExitCode);
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("Capturing Output")]
+        public async Task PingGoogleAndCaptureOutput()
+        {
+            var receivedStandardOutput = false;
+
+            using (var process = new AsyncProcess(new AsyncProcessStartInfo("ping.exe", "www.google.com")
+            {
+                OnStandardOutputReceived = stdOut =>
+                {
+                    Console.WriteLine($"Info: {stdOut}");
+                    receivedStandardOutput = true;
+                }
+            }))
+            {
+                var result = await process.Run();
+
+                Assert.AreEqual(AsyncProcessCompletionState.Completed, result.CompletionState);
+                Assert.AreEqual(0, result.ExitCode);
+                Assert.IsTrue(receivedStandardOutput);
             }
         }
     }

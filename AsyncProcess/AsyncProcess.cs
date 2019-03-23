@@ -10,6 +10,7 @@ namespace SamOatesGames.System
     {
         #region Private Members
 
+        private readonly AsyncProcessStartInfo m_startInfo;
         private readonly Process m_process;
         private readonly CancellationToken m_taskCancellationToken;
 
@@ -17,11 +18,12 @@ namespace SamOatesGames.System
 
         #region Constructors
 
-        public AsyncProcess(ProcessStartInfo startInfo, CancellationToken? cancellationToken = null)
+        public AsyncProcess(AsyncProcessStartInfo startInfo, CancellationToken? cancellationToken = null)
         {
+            m_startInfo = startInfo;
             m_process = new Process
             {
-                StartInfo = startInfo
+                StartInfo = startInfo.ToProcessStartInfo()
             };
 
             m_taskCancellationToken = cancellationToken ?? CancellationToken.None;
@@ -66,14 +68,32 @@ namespace SamOatesGames.System
 
             try
             {
-                while (!m_process.HasExited)
+                while(IsRunning())
                 {
+                    if (m_startInfo.IsCapturingOutput())
+                    {
+                        var stdOutput = await m_process.StandardOutput.ReadLineAsync();
+                        if (!string.IsNullOrWhiteSpace(stdOutput))
+                        {
+                            m_startInfo.OnStandardOutputReceived?.Invoke(stdOutput);
+                        }
+
+                        var stdError = await m_process.StandardError.ReadLineAsync();
+                        if (!string.IsNullOrWhiteSpace(stdError))
+                        {
+                            m_startInfo.OnStandardErrorReceived?.Invoke(stdError);
+                        }
+                    }
+
                     if (m_taskCancellationToken.IsCancellationRequested)
                     {
                         return new AsyncProcessResult(AsyncProcessCompletionState.Cancelled);
                     }
 
-                    await Task.Delay(1, m_taskCancellationToken);
+                    if (!m_process.HasExited)
+                    {
+                        await Task.Delay(1, m_taskCancellationToken);
+                    }
                 }
             }
             catch (TaskCanceledException)
@@ -98,6 +118,31 @@ namespace SamOatesGames.System
             return result;
         }
 
+        private bool IsRunning()
+        {
+            if (!m_process.HasExited)
+            {
+                return true;
+            }
+
+            if (!m_startInfo.IsCapturingOutput())
+            {
+                return false;
+            }
+
+            if (!m_process.StandardOutput.EndOfStream)
+            {
+                return true;
+            }
+
+            if (!m_process.StandardError.EndOfStream)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         #endregion
 
         #region Public Methods
@@ -108,7 +153,7 @@ namespace SamOatesGames.System
             {
                 throw new NullReferenceException("The internal process is null.");
             }
-            
+
             return await Task.Run(InternalRun, CancellationToken.None);
         }
 
@@ -123,10 +168,10 @@ namespace SamOatesGames.System
 
         public static async Task<AsyncProcessResult> Run(string fileName, string arguments)
         {
-            return await Run(new ProcessStartInfo(fileName, arguments));
+            return await Run(new AsyncProcessStartInfo(fileName, arguments));
         }
 
-        public static async Task<AsyncProcessResult> Run(ProcessStartInfo startInfo)
+        public static async Task<AsyncProcessResult> Run(AsyncProcessStartInfo startInfo)
         {
             using (var asyncProcess = new AsyncProcess(startInfo))
             {
