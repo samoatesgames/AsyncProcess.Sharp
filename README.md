@@ -6,18 +6,19 @@
 This library is a very simple wrapper around `System.Diagnostics.Process`, allowing for async/await operations.
 Rather than creating and starting a `Process`, you instead create an `AsyncProcess` and await on the running of said process.
 
-Currently the library does not support all operations possible with System.Diagnostics.Process, but it does allow for the following:
+Currently the library does not support all operations possible with `System.Diagnostics.Process`, but it does allow for the following:
 
- * Running a process and awaiting for the process to end.
+ * Running a process and async awaiting for the process to end.
  * Capturing of standard output streams.
  * Capturing of standard error streams.
  * Setting of the `CreateNoWindow` property.
  * Setting of launch arguments
  * Setting of the current working directory.
+ * Cancelling of async processes.
 
 All run methods for the `AsyncProcess` return an `AsyncProcessResult`.
 This result contains the state of the result (i.e. did the process complete or did an error occur).
-If the process completed, the result will contain the exit code of the process.
+If the process completed successfully, the result will contain the exit code of the process.
 If the process failed, an `Exception` property will be set to the exception which occurred whilst running the process.
  
 When constructing an `AsyncProcess` object you may pass an option cancellation token which will be respected by the async process.
@@ -42,7 +43,8 @@ using (var process = new AsyncProcess(new AsyncProcessStartInfo("missing-file.ex
     var result = await process.Run();
     if (result.Exception != null)
     {
-    	throw new Exception($"Failed to run 'missing-file.exe', result: ${result.CompletionState}", result.Exception);
+    	throw new Exception($"Failed to run 'missing-file.exe', result: ${result.CompletionState}",
+							result.Exception);
     }
 }
 ```
@@ -83,7 +85,7 @@ There are a few helper methods which allow for single line usage of the AsyncPro
 public static async Task<AsyncProcessResult> Run(string fileName)
 ```
 
-###### await AsyncProcess.Run("ping.exe", "www.github.com")
+###### await AsyncProcess.Run("notepad.exe", @"C:\Windows\System32\drivers\etc\hosts")
 ```csharp
 /// <summary>
 /// Create a new process, executing the specified file with the provided launch arguments.
