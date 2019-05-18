@@ -13,6 +13,10 @@ namespace SamOatesGames.System
         private readonly AsyncProcessStartInfo m_startInfo;
         private readonly Process m_process;
         private readonly CancellationToken m_taskCancellationToken;
+        
+        private readonly AutoResetEvent m_standardOutputClosed = new AutoResetEvent(false);
+        private readonly AutoResetEvent m_standardErrorClosed = new AutoResetEvent(false);
+
         private bool m_isDisposed;
 
         #endregion
@@ -51,6 +55,8 @@ namespace SamOatesGames.System
 
             m_isDisposed = true;
             m_process?.Dispose();
+            m_standardOutputClosed?.Dispose();
+            m_standardErrorClosed?.Dispose();
         }
 
         #endregion
@@ -68,9 +74,29 @@ namespace SamOatesGames.System
             // First start the actual process and handle the possible fail cases
             try
             {
+                if (m_startInfo.OnStandardOutputReceived != null)
+                {
+                    m_process.OutputDataReceived += OnProcessStandardOutputReceived;
+                }
+
+                if (m_startInfo.OnStandardErrorReceived != null)
+                {
+                    m_process.ErrorDataReceived += OnProcessStandardErrorReceived;
+                }
+
                 if (!m_process.Start())
                 {
                     return new AsyncProcessResult(AsyncProcessCompletionState.FailedToStart);
+                }
+
+                if (m_startInfo.OnStandardOutputReceived != null)
+                {
+                    m_process.BeginOutputReadLine();
+                }
+
+                if (m_startInfo.OnStandardErrorReceived != null)
+                {
+                    m_process.BeginErrorReadLine();
                 }
             }
             catch (Win32Exception e)
@@ -94,34 +120,12 @@ namespace SamOatesGames.System
             // We have started the process successfully, wait for the process to complete.
             try
             {
-                while(IsRunning())
+                while (!m_process.WaitForExit(10))
                 {
-                    // The user is capturing standard error or standard out, process the streams.
-                    if (m_startInfo.IsCapturingOutput())
-                    {
-                        var stdOutput = await m_process.StandardOutput.ReadLineAsync();
-                        if (!string.IsNullOrWhiteSpace(stdOutput))
-                        {
-                            m_startInfo.OnStandardOutputReceived?.Invoke(stdOutput);
-                        }
-
-                        var stdError = await m_process.StandardError.ReadLineAsync();
-                        if (!string.IsNullOrWhiteSpace(stdError))
-                        {
-                            m_startInfo.OnStandardErrorReceived?.Invoke(stdError);
-                        }
-                    }
-
                     // Check to see if the process has been cancelled
                     if (m_taskCancellationToken.IsCancellationRequested)
                     {
                         return new AsyncProcessResult(AsyncProcessCompletionState.Cancelled);
-                    }
-
-                    // If the process is still running wait a little.
-                    if (!m_process.HasExited)
-                    {
-                        await Task.Delay(10, m_taskCancellationToken);
                     }
                 }
             }
@@ -142,12 +146,59 @@ namespace SamOatesGames.System
                     m_process.Kill();
                     await Task.Delay(1, CancellationToken.None);
                 }
+
+                if (m_startInfo.IsCapturingOutput())
+                {
+                    if (m_startInfo.OnStandardOutputReceived != null)
+                    {
+                        if (!m_taskCancellationToken.IsCancellationRequested)
+                        {
+                            m_standardOutputClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
+                        }
+
+                        m_process.OutputDataReceived -= OnProcessStandardOutputReceived;
+                    }
+
+                    if (m_startInfo.OnStandardErrorReceived != null)
+                    {
+                        if (!m_taskCancellationToken.IsCancellationRequested)
+                        {
+                            m_standardErrorClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
+                        }
+
+                        m_process.ErrorDataReceived -= OnProcessStandardErrorReceived;
+                    }
+                }
             }
 
             // The process ran to completion, get the exit code and set it in the result.
             var result = new AsyncProcessResult(AsyncProcessCompletionState.Completed);
             result.SetExitCode(m_process.ExitCode);
             return result;
+        }
+
+        private void OnProcessStandardOutputReceived(object sender, DataReceivedEventArgs e)
+        {
+            if (e.Data == null)
+            {
+                // Pipe closed
+                m_standardOutputClosed.Set();
+                return;
+            }
+
+            m_startInfo.OnStandardOutputReceived.Invoke(e.Data);
+        }
+
+        private void OnProcessStandardErrorReceived(object sender, DataReceivedEventArgs e)
+        {
+            if (e.Data == null)
+            {
+                // Pipe closed
+                m_standardErrorClosed.Set();
+                return;
+            }
+
+            m_startInfo.OnStandardErrorReceived.Invoke(e.Data);
         }
 
         #endregion
@@ -188,13 +239,13 @@ namespace SamOatesGames.System
             }
 
             // We are capturing output and still have some standard output to read.
-            if (!m_process.StandardOutput.EndOfStream)
+            if (!m_standardOutputClosed.WaitOne(1))
             {
                 return true;
             }
 
             // We are capturing output and still have some standard error to read.
-            if (!m_process.StandardError.EndOfStream)
+            if (!m_standardErrorClosed.WaitOne(1))
             {
                 return true;
             }

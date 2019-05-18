@@ -36,6 +36,13 @@ namespace SamOatesGames.System
         public Action<string> OnStandardErrorReceived { get; set; }
 
         /// <summary>
+        /// If we are redirecting standard output or error, how long we should wait for the
+        /// output/error pipes to be fully flushed. Time is in milliseconds, -1 means block
+        /// until the pipes are closed.
+        /// </summary>
+        public int OutputRedirectingTimeout { get; set; } = -1;
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="fileName">The file name of the process to run.</param>
