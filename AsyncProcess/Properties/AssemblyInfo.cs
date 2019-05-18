@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("AsyncProcess")]
+[assembly: AssemblyTitle("AsyncProcess.Sharp")]
 [assembly: AssemblyDescription("An Async wrapper for System.Diagnostics.Process")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("SamOatesGames")]
-[assembly: AssemblyProduct("AsyncProcess")]
+[assembly: AssemblyProduct("AsyncProcess.Sharp")]
 [assembly: AssemblyCopyright("Copyright ©  2019")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

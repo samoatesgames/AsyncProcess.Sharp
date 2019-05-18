@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>AsyncProcess.Sharp</id>
+    <version>1.0.0</version>
+    <authors>SamOatesGames</authors>
+    <owners>SamOatesGames</owners>
+    <licenseUrl>https://github.com/samoatesgames/AsyncProcess.Sharp/raw/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/samoatesgames/AsyncProcess.Sharp</projectUrl>
+    <iconUrl>https://github.com/samoatesgames/AsyncProcess.Sharp/raw/master/Logo.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>An Async wrapper for System.Diagnostics.Process</description>
+    <releaseNotes>Initial Release</releaseNotes>
+    <copyright>Copyright 2019</copyright>
+    <tags>CSharp Process Async</tags>
+  </metadata>
+  <files>
+    <file src="*.dll" target="lib\net461" />
+    <file src="*.pdb" target="lib\net461" />
+  </files>
+</package>
