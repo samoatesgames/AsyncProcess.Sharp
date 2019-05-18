@@ -43,6 +43,11 @@ namespace SamOatesGames.System
         public int OutputRedirectingTimeout { get; set; } = -1;
 
         /// <summary>
+        /// What output from the process should be captured and be stored in the process result.
+        /// </summary>
+        public ProcessOutputCaptureMode CaptureOutputToProcessResult { get; set; } = ProcessOutputCaptureMode.None;
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="fileName">The file name of the process to run.</param>
@@ -61,9 +66,9 @@ namespace SamOatesGames.System
         {
             var startInfo = new ProcessStartInfo(FileName, Arguments)
             {
-                RedirectStandardOutput = IsCapturingOutput(),
-                RedirectStandardError = IsCapturingOutput(),
-                UseShellExecute = !IsCapturingOutput(),
+                RedirectStandardOutput = IsCapturingStandardOutput(),
+                RedirectStandardError = IsCapturingStandardError(),
+                UseShellExecute = !IsCapturingAnyOutput(),
                 CreateNoWindow = CreateNoWindow,
                 WorkingDirectory = WorkingDirectory
             };
@@ -74,10 +79,30 @@ namespace SamOatesGames.System
         /// Is the process capturing any output (standard or error).
         /// </summary>
         /// <returns>True if we are capturing output from either standard, error or both.</returns>
-        public bool IsCapturingOutput()
+        public bool IsCapturingAnyOutput()
+        {
+            return IsCapturingStandardOutput()
+                   || IsCapturingStandardError();
+        }
+
+        /// <summary>
+        /// Is the process capturing standard output
+        /// </summary>
+        /// <returns>True if we are forwarding standard output, or capturing it for the process result</returns>
+        public bool IsCapturingStandardOutput()
         {
             return OnStandardOutputReceived != null
-                   || OnStandardErrorReceived != null;
+                || CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Output);
+        }
+
+        /// <summary>
+        /// Is the process capturing standard error
+        /// </summary>
+        /// <returns>True if we are forwarding standard error, or capturing it for the process result</returns>
+        public bool IsCapturingStandardError()
+        {
+            return OnStandardErrorReceived != null
+               || CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Error);
         }
     }
 }

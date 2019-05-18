@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,7 +18,20 @@ namespace SamOatesGames.System
         private readonly AutoResetEvent m_standardOutputClosed = new AutoResetEvent(false);
         private readonly AutoResetEvent m_standardErrorClosed = new AutoResetEvent(false);
 
+        private readonly StringBuilder m_standardOutputBuilder = new StringBuilder();
+        private readonly StringBuilder m_standardErrorBuilder = new StringBuilder();
+
         private bool m_isDisposed;
+
+        #endregion
+
+        #region Public Properties
+
+        /// <summary>
+        /// Returns true if the process is still running or we are still
+        /// processing the output/error streams of the process.
+        /// </summary>
+        public bool IsRunning { get; private set; }
 
         #endregion
 
@@ -74,12 +88,12 @@ namespace SamOatesGames.System
             // First start the actual process and handle the possible fail cases
             try
             {
-                if (m_startInfo.OnStandardOutputReceived != null)
+                if (m_startInfo.IsCapturingStandardOutput())
                 {
                     m_process.OutputDataReceived += OnProcessStandardOutputReceived;
                 }
 
-                if (m_startInfo.OnStandardErrorReceived != null)
+                if (m_startInfo.IsCapturingStandardError())
                 {
                     m_process.ErrorDataReceived += OnProcessStandardErrorReceived;
                 }
@@ -89,12 +103,12 @@ namespace SamOatesGames.System
                     return new AsyncProcessResult(AsyncProcessCompletionState.FailedToStart);
                 }
 
-                if (m_startInfo.OnStandardOutputReceived != null)
+                if (m_startInfo.IsCapturingStandardOutput())
                 {
                     m_process.BeginOutputReadLine();
                 }
 
-                if (m_startInfo.OnStandardErrorReceived != null)
+                if (m_startInfo.IsCapturingStandardError())
                 {
                     m_process.BeginErrorReadLine();
                 }
@@ -116,10 +130,12 @@ namespace SamOatesGames.System
                 // Something unknown happened! return passing the exception to the result
                 return new AsyncProcessResult(AsyncProcessCompletionState.Unknown, e);
             }
-
+            
             // We have started the process successfully, wait for the process to complete.
             try
             {
+                IsRunning = true;
+
                 while (!m_process.WaitForExit(10))
                 {
                     // Check to see if the process has been cancelled
@@ -147,36 +163,53 @@ namespace SamOatesGames.System
                     await Task.Delay(1, CancellationToken.None);
                 }
 
-                if (m_startInfo.IsCapturingOutput())
+                if (m_startInfo.IsCapturingStandardOutput())
                 {
-                    if (m_startInfo.OnStandardOutputReceived != null)
+                    if (!m_taskCancellationToken.IsCancellationRequested)
                     {
-                        if (!m_taskCancellationToken.IsCancellationRequested)
-                        {
-                            m_standardOutputClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
-                        }
-
-                        m_process.OutputDataReceived -= OnProcessStandardOutputReceived;
+                        m_standardOutputClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
                     }
 
-                    if (m_startInfo.OnStandardErrorReceived != null)
-                    {
-                        if (!m_taskCancellationToken.IsCancellationRequested)
-                        {
-                            m_standardErrorClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
-                        }
-
-                        m_process.ErrorDataReceived -= OnProcessStandardErrorReceived;
-                    }
+                    m_process.OutputDataReceived -= OnProcessStandardOutputReceived;
                 }
+
+                if (m_startInfo.IsCapturingStandardError())
+                {
+                    if (!m_taskCancellationToken.IsCancellationRequested)
+                    {
+                        m_standardErrorClosed.WaitOne(m_startInfo.OutputRedirectingTimeout);
+                    }
+
+                    m_process.ErrorDataReceived -= OnProcessStandardErrorReceived;
+                }
+
+                IsRunning = false;
             }
 
             // The process ran to completion, get the exit code and set it in the result.
             var result = new AsyncProcessResult(AsyncProcessCompletionState.Completed);
             result.SetExitCode(m_process.ExitCode);
+
+            if (m_startInfo.CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Output))
+            {
+                result.SetStandardOutput(m_standardOutputBuilder.ToString());
+            }
+
+            if (m_startInfo.CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Error))
+            {
+                result.SetStandardError(m_standardErrorBuilder.ToString());
+            }
+
             return result;
         }
 
+        /// <summary>
+        /// Callback from the internal process, used for capturing and or forwarding standard
+        /// output messages, this will only be called if the start info is requesting some kind
+        /// of output capturing.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnProcessStandardOutputReceived(object sender, DataReceivedEventArgs e)
         {
             if (e.Data == null)
@@ -186,9 +219,21 @@ namespace SamOatesGames.System
                 return;
             }
 
-            m_startInfo.OnStandardOutputReceived.Invoke(e.Data);
+            m_startInfo.OnStandardOutputReceived?.Invoke(e.Data);
+
+            if (m_startInfo.CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Output))
+            {
+                m_standardOutputBuilder.AppendLine(e.Data);
+            }
         }
 
+        /// <summary>
+        /// Callback from the internal process, used for capturing and or forwarding standard
+        /// error messages, this will only be called if the start info is requesting some kind
+        /// of error capturing.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnProcessStandardErrorReceived(object sender, DataReceivedEventArgs e)
         {
             if (e.Data == null)
@@ -198,7 +243,12 @@ namespace SamOatesGames.System
                 return;
             }
 
-            m_startInfo.OnStandardErrorReceived.Invoke(e.Data);
+            m_startInfo.OnStandardErrorReceived?.Invoke(e.Data);
+
+            if (m_startInfo.CaptureOutputToProcessResult.HasFlag(ProcessOutputCaptureMode.Error))
+            {
+                m_standardOutputBuilder.AppendLine(e.Data);
+            }
         }
 
         #endregion
@@ -217,42 +267,6 @@ namespace SamOatesGames.System
             }
 
             return await Task.Run(InternalRun, CancellationToken.None);
-        }
-
-        /// <summary>
-        /// Returns true if the process is still running or we are still
-        /// processing the output/error streams of the process.
-        /// </summary>
-        /// <returns></returns>
-        public bool IsRunning()
-        {
-            // Process is still running
-            if (!m_process.HasExited)
-            {
-                return true;
-            }
-
-            // If we aren't capturing output, then there is nothing else to test.
-            if (!m_startInfo.IsCapturingOutput())
-            {
-                return false;
-            }
-
-            // We are capturing output and still have some standard output to read.
-            if (!m_standardOutputClosed.WaitOne(1))
-            {
-                return true;
-            }
-
-            // We are capturing output and still have some standard error to read.
-            if (!m_standardErrorClosed.WaitOne(1))
-            {
-                return true;
-            }
-
-            // The process has ended and we have fully processed both the standard out
-            // and error streams.
-            return false;
         }
 
         #endregion

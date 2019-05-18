@@ -26,6 +26,20 @@ namespace SamOatesGames.System
         public int ExitCode { get; private set; } = int.MinValue;
 
         /// <summary>
+        /// The standard error from the process.
+        /// Will only be set if start info 'CaptureOutputToProcessResult' has
+        /// the flag set for error capturing
+        /// </summary>
+        public string StandardOutput { get; private set; }
+
+        /// <summary>
+        /// The standard error from the process.
+        /// Will only be set if start info 'CaptureOutputToProcessResult' has
+        /// the flag set for error capturing
+        /// </summary>
+        public string StandardError { get; private set; }
+
+        /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="completionState">The state the result should be set to</param>
@@ -43,6 +57,28 @@ namespace SamOatesGames.System
         internal void SetExitCode(int exitCode)
         {
             ExitCode = exitCode;
+        }
+
+        /// <summary>
+        /// Used to set the standard output from the process.
+        /// Will only be set if start info 'CaptureOutputToProcessResult' has
+        /// the flag set for output capturing
+        /// </summary>
+        /// <param name="output">The output the process created</param>
+        internal void SetStandardOutput(string output)
+        {
+            StandardOutput = output;
+        }
+
+        /// <summary>
+        /// Used to set the standard error from the process.
+        /// Will only be set if start info 'CaptureOutputToProcessResult' has
+        /// the flag set for error capturing
+        /// </summary>
+        /// <param name="error">The error output the process created</param>
+        internal void SetStandardError(string error)
+        {
+            StandardError = error;
         }
     }
 }

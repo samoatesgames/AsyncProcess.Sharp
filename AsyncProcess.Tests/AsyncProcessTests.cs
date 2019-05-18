@@ -62,7 +62,7 @@ namespace SamOatesGames.Tests
 
         [TestMethod]
         [TestCategory("Capturing Output")]
-        public async Task PingGoogleAndCaptureOutput()
+        public async Task PingGoogleAndCaptureOutputAsync()
         {
             var receivedStandardOutput = false;
 
@@ -80,6 +80,27 @@ namespace SamOatesGames.Tests
                 Assert.AreEqual(AsyncProcessCompletionState.Completed, result.CompletionState);
                 Assert.AreEqual(0, result.ExitCode);
                 Assert.IsTrue(receivedStandardOutput);
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("Capturing Output")]
+        public async Task PingGoogleAndCaptureOutputInResult()
+        {
+            using (var process = new AsyncProcess(new AsyncProcessStartInfo("ping.exe", "www.google.com")
+            {
+                CaptureOutputToProcessResult = ProcessOutputCaptureMode.Output
+            }))
+            {
+                var result = await process.Run();
+
+                Assert.AreEqual(AsyncProcessCompletionState.Completed, result.CompletionState);
+                Assert.AreEqual(0, result.ExitCode);
+
+                Assert.IsNotNull(result.StandardOutput);
+                Assert.IsNull(result.StandardError);
+
+                Assert.IsTrue(result.StandardOutput.Length > 0);
             }
         }
     }
