@@ -25,6 +25,9 @@ When constructing an `AsyncProcess` object you may pass an option cancellation t
 However, the process may not exit immediately. When a cancellation token is set the `Kill` method will be executed on the internal 
 `System.Diagnostics.Process` and we will wait until the processes `HasExited` property returns true.
  
+[![GitHub](https://img.shields.io/github/license/samoatesgames/AsyncProcess.svg?style=flat-square)](https://github.com/samoatesgames/AsyncProcess/blob/master/LICENSE)
+[![Nuget](https://img.shields.io/nuget/dt/AsyncProcess.svg?label=Nuget&style=flat-square)](https://www.nuget.org/packages/AsyncProcess/)
+ 
 ## Example
 
 ### Running a process and using the exit code of the process
@@ -49,7 +52,7 @@ using (var process = new AsyncProcess(new AsyncProcessStartInfo("missing-file.ex
 }
 ```
 
-### Capturing output from a process
+### Capturing output from a process using callbacks
 ```csharp
 var startInfo = new AsyncProcessStartInfo("ping.exe", "www.github.com")
 {
@@ -67,6 +70,22 @@ using (var process = new AsyncProcess(startInfo))
 {
     var result = await process.Run();
     Console.WriteLine($"The pinging of github resulted in the exit code: {result.ExitCode}");
+}
+```
+
+### Capturing output from a process storing it in the result
+```csharp
+var startInfo = new AsyncProcessStartInfo("ping.exe", "www.github.com")
+{
+    CaptureOutputToProcessResult = ProcessOutputCaptureMode.Both
+};
+
+using (var process = new AsyncProcess(startInfo))
+{
+    var result = await process.Run();
+    Console.WriteLine($"The pinging of github resulted in the exit code: {result.ExitCode}");
+	Console.WriteLine($"Standard Output: {result.StandardOutput}");	
+	Console.WriteLine($"Standard Error: {result.StandardError}");	
 }
 ```
 
